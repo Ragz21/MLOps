@@ -33,3 +33,18 @@ stages:
       hash: md5
       md5: adf63b6ce20f7ee74f63d5dabb325226
       size: 10829967
+  preprocess:
+    cmd: python src/preprocessing.py
+    deps:
+    - path: src/preprocessing.py
+      hash: md5
+      md5: d44053c8ba49d594100c89ac2b2f985b
+      size: 362
+    params:
+      params.yaml:
+        preprocessing.normalize: true
+    outs:
+    - path: data/iris_processed.csv
+      hash: md5
+      md5: 92ac4c2fd1b042e781857bdaa230b834
+      size: 12120
