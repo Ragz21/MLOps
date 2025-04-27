@@ -1,0 +1,151 @@
+## Initialization
+gcloud init
+<select project or create. Link billing account>
+<projectid: mlflow-raghava-gcp-1>
+
+-------------------------------------------------------------------------------
+## SQL
+### Instance
+gcloud sql instances create mlflow-instance-raghava \
+--database-version=POSTGRES_15 \
+--region=us-west2 \
+--tier=db-f1-micro \
+--storage-type=HDD \
+--storage-size=10GB \
+--authorized-networks=0.0.0.0/0
+
+    ----------------------------------------------------------------------
+### User
+gcloud sql users create mlflowuser-raghava \
+--instance=mlflow-instance-raghava \
+--password=life-is-tough
+
+    ----------------------------------------------------------------------
+### Database
+gcloud sql databases create mlflow-runs-raghava --instance=mlflow-instance-raghava
+
+-------------------------------------------------------------------------------
+## GCS
+gcloud storage buckets create gs://mlflow-bucket-raghava-23042025
+<create mlfruns folder in the bucket on console>
+
+-------------------------------------------------------------------------------
+## Artifact Repo
+gcloud artifacts repositories create mlflow-repo-raghava \
+--location=us-west2 \
+--repository-format=docker
+
+-------------------------------------------------------------------------------
+## Service Account
+gcloud iam service-accounts create mlflow-sa-raghava
+<get project name using this>
+gcloud config get-value project
+
+-------------------------------------------------------------------------------
+## Roles
+gcloud projects add-iam-policy-binding mlflow-raghava-gcp-1 \
+--member='serviceAccount:mlflow-sa-raghava@mlflow-raghava-gcp-1.iam.gserviceaccount.com' \
+--role='roles/cloudsql.editor'
+
+gcloud projects add-iam-policy-binding mlflow-raghava-gcp-1 \
+--member='serviceAccount:mlflow-sa-raghava@mlflow-raghava-gcp-1.iam.gserviceaccount.com' \
+--role='roles/storage.objectAdmin'
+
+gcloud projects add-iam-policy-binding mlflow-raghava-gcp-1 \
+--member='serviceAccount:mlflow-sa-raghava@mlflow-raghava-gcp-1.iam.gserviceaccount.com' \
+--role='roles/secretmanager.secretAccessor'
+
+gcloud projects add-iam-policy-binding mlflow-raghava-gcp-1 \
+--member='serviceAccount:mlflow-sa-raghava@mlflow-raghava-gcp-1.iam.gserviceaccount.com' \
+--role='roles/artifactregistry.admin'
+
+gcloud projects add-iam-policy-binding mlflow-raghava-gcp-1 \
+--member='serviceAccount:mlflow-sa-raghava@mlflow-raghava-gcp-1.iam.gserviceaccount.com' \
+--role='roles/clouddeploy.serviceAgent'
+
+gcloud projects add-iam-policy-binding mlflow-raghava-gcp-1 \
+--member='serviceAccount:mlflow-sa-raghava@mlflow-raghava-gcp-1.iam.gserviceaccount.com' \
+--role='roles/cloudfunctions.admin'
+
+-------------------------------------------------------------------------------
+## Secrets
+### Service Account
+gcloud iam service-accounts keys create sa-private-key.json \
+--iam-account=mlflow-sa-raghava@mlflow-raghava-gcp-1.iam.gserviceaccount.com
+
+gcloud secrets create access_keys --data-file=sa-private-key.json
+
+    ----------------------------------------------------------------------
+### SQL Instance
+gcloud sql instances describe mlflow-instance-raghava
+<get the primary IP address, ex: 34.102.57.177>
+
+34.102.105.164
+
+gcloud secrets create database_url
+
+echo -n "postgresql://mlflowuser-raghava:life-is-tough@34.102.105.164/mlflow-runs-raghava" | \
+    gcloud secrets versions add database_url --data-file=-
+
+    ----------------------------------------------------------------------
+### GCS
+gcloud secrets create bucket_url
+
+echo -n "gs://mlflow-bucket-raghava-23042025/mlruns" | \
+    gcloud secrets versions add bucket_url --data-file=-
+
+-------------------------------------------------------------------------------
+## Docker
+<create requirements.txt>
+<create Dockerfile>
+<create server.sh>
+
+gcloud auth configure-docker us-west2-docker.pkg.dev
+
+docker build --platform linux/amd64 -t \
+"us-west2-docker.pkg.dev/mlflow-raghava-gcp-1/mlflow-repo-raghava/mlflow:v1" .
+
+docker push "us-west2-docker.pkg.dev/mlflow-raghava-gcp-1/mlflow-repo-raghava/mlflow:v1"
+
+-------------------------------------------------------------------------------
+## Enable Services
+
+gcloud services enable compute.googleapis.com
+gcloud services enable run.googleapis.com
+ 
+-------------------------------------------------------------------------------
+## Cloud Run 
+
+gcloud run deploy "mlflow-run" \
+          --image "us-west2-docker.pkg.dev/mlflow-raghava-gcp-1/mlflow-repo-raghava/mlflow:v1" \
+          --region "us-west2" \
+          --service-account mlflow-sa-raghava \
+          --update-secrets=/secrets/credentials=access_keys:latest \
+          --update-secrets=POSTGRESQL_URL=database_url:latest \
+          --update-secrets=STORAGE_URL=bucket_url:latest \
+          --memory 2Gi \
+          --allow-unauthenticated \
+          --port 8080 \
+          --timeout 900 \
+          --concurrency 1
+
+-------------------------------------------------------------------------------
+## ML Flow
+
+<replace tracking uri with the url you get>
+
+-------------------------------------------------------------------------------
+## Destroying project
+
+gcloud run services delete mlflow-run --region us-west2
+gsutil rm -r gs://mlflow-instance-raghava-15032025
+gcloud sql instances delete mlflow-instance-raghava
+gcloud secrets delete database_url
+gcloud secrets delete bucket_url
+gcloud iam service-accounts delete mlflow-sa-raghava@mlflow-raghava-gcp-1.iam.gserviceaccount.com
+gcloud artifacts repositories delete mlflow-instance-raghava --location=us-west2
+
+-- 
+gcloud projects delete mlflow-raghava-gcp-1
+
+

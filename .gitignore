@@ -1,3 +1,6 @@
 /mlruns
 /labs/notebooks/save_data
 /labs/notebooks/mlruns
+/mlruns
+.DS_Store
+*.pyc
